@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+.venv
+venv
+.idea
+.vscode
+*.log
+.pytest_cache
+data
+weights/*_cv_bundle.joblib
+benchmarking/results/*.png

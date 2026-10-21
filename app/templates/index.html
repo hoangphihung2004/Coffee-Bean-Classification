@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coffee Bean Classifier - Edge Machine Learning</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        coffee: '#8b5a2b'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom smooth scrollbar for grids */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="bg-[#f1f5f9] text-slate-800 h-screen w-screen overflow-hidden flex flex-col antialiased">
+
+    <!-- Top Navigation Bar: Clean Lab White Header -->
+    <header class="h-16 border-b border-slate-200 bg-white px-6 lg:px-8 flex items-center shrink-0 shadow-xs">
+        <h1 class="text-base lg:text-xl font-extrabold tracking-tight text-slate-900">Coffee Species Classification System</h1>
+    </header>
+
+    <!-- Main Container: Perfectly fitted to 1 viewport screen, no scrolling -->
+    <main class="flex-1 p-4 lg:p-6 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
+
+        <!-- LEFT COLUMN: INPUT CONTROLS & SELECTION (5 Cols) -->
+        <div class="lg:col-span-5 flex flex-col h-full bg-white border border-slate-200/90 rounded-xl p-4 shadow-sm overflow-hidden">
+            
+            <div class="flex flex-col space-y-3 shrink-0">
+                <!-- Select Model & Select Feature Type -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Select Model</label>
+                        <select id="model-select" onchange="onConfigChange()" class="w-full bg-slate-50/80 border border-slate-200 rounded-lg px-3 py-2 text-xs lg:text-[13px] font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 transition">
+                            {% for key, val in models.items() %}
+                            <option value="{{ key }}" {% if key == 'LR' %}selected{% endif %}>{{ val.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">Select Feature Type</label>
+                        <select id="feature-select" onchange="onConfigChange()" class="w-full bg-slate-50/80 border border-slate-200 rounded-lg px-3 py-2 text-xs lg:text-[13px] font-semibold text-slate-800 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 transition">
+                            {% for key, val in features.items() %}
+                            <option value="{{ key }}" {% if key == 'LBP' %}selected{% endif %}>{{ val.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Image Upload -->
+                <div>
+                    <div class="mb-1.5 flex items-center justify-between">
+                        <label class="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Upload Coffee Bean Image(s)</label>
+                        <span id="upload-count-badge" class="hidden text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full font-mono">0 SELECTED</span>
+                    </div>
+
+                    <div class="flex items-center space-x-2">
+                        <label class="flex-1 cursor-pointer bg-slate-50/80 hover:bg-emerald-50/40 border border-dashed border-slate-300 hover:border-emerald-600 rounded-lg py-2.5 px-3 text-center transition flex items-center justify-center space-x-2">
+                            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            <span id="upload-btn-text" class="text-xs lg:text-[13px] font-bold text-slate-700">Upload Image(s)</span>
+                            <input type="file" id="file-upload" accept="image/*" multiple class="hidden" onchange="handleFileChange(event)">
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Preview Area (Expands to fill all vertical space) -->
+            <div class="flex-1 w-full my-3 min-h-[200px] relative bg-slate-50/80 rounded-lg border border-slate-200 flex flex-col overflow-hidden p-2">
+                <!-- 1. Single Image Preview (When 1 image is loaded) -->
+                <div id="single-preview-container" class="w-full h-full flex items-center justify-center">
+                    <img id="preview-img" src="/static/samples/Expresso_sample_1.jpg" alt="Preview" class="max-h-full max-w-full object-contain">
+                </div>
+                
+                <div id="batch-preview-container" class="hidden w-full h-full">
+                    <!-- Cell Grid: each cell is a distinct card with an image -->
+                    <div id="batch-thumbs-grid" class="w-full h-full overflow-y-auto grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-5 gap-1.5 sm:gap-2 pr-1 content-start auto-rows-max">
+                        <!-- Dynamic bean image cells -->
+                    </div>
+                </div>
+
+                <div id="loading-spinner" class="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-2 hidden">
+                    <div class="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-xs font-mono font-bold text-emerald-700">PROCESSING...</span>
+                </div>
+            </div>
+
+            <!-- Run Action Button: Deep Botanical Emerald -->
+            <button id="btn-predict" onclick="runPrediction()" class="w-full py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-sm tracking-wide shadow-sm transition flex items-center justify-center space-x-2 shrink-0">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"/></svg>
+                <span>RUN CLASSIFICATION</span>
+            </button>
+        </div>
+
+        <!-- RIGHT COLUMN: 2 SEPARATE BLOCKS (RESULTS & JETSON HARDWARE) -->
+        <div class="lg:col-span-7 flex flex-col justify-between h-full space-y-4 overflow-hidden">
+            
+            <!-- 1. TOP BLOCK: CLASSIFICATION RESULTS -->
+            <div class="bg-white border border-slate-200/90 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col justify-between flex-1 overflow-hidden">
+                <div class="flex flex-col h-full justify-between overflow-y-auto pr-1">
+                    <!-- Header of Block 1 -->
+                    <div class="flex items-center justify-between text-xs font-mono mb-2">
+                        <span class="font-bold uppercase tracking-wider text-slate-800 flex items-center space-x-1.5">
+                            <svg class="w-4 h-4 text-emerald-600 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke-width="2"/>
+                                <circle cx="12" cy="12" r="3" stroke-width="2"/>
+                                <path stroke-linecap="round" stroke-width="2" d="M12 2v3m0 14v3M2 12h3m14 0h3"/>
+                            </svg>
+                            <span>CLASSIFICATION RESULTS</span>
+                        </span>
+                        <span id="mode-tag" class="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-full font-mono border border-slate-200">SINGLE BEAN</span>
+                    </div>
+
+                    <!-- Hero Prediction Banner -->
+                    <div class="bg-slate-50/90 border border-slate-200 rounded-xl p-3">
+                        <span id="res-title" class="text-[11px] font-mono uppercase text-slate-700 font-bold tracking-wider block">Predicted Species</span>
+                        <span id="res-class" class="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight block mt-0.5">--</span>
+                        <span id="res-subtext" class="text-xs font-mono text-emerald-700 font-bold block mt-1 hidden"></span>
+                    </div>
+
+                    <!-- Softmax Probability / Batch Distribution Bars -->
+                    <div class="bg-slate-50/70 border border-slate-200 rounded-xl p-3 space-y-2.5 font-mono text-xs my-2">
+                        <span id="dist-title" class="text-[11px] font-mono font-bold text-slate-700 uppercase tracking-wider block mb-0.5">Class Probabilities</span>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-slate-700 font-bold text-xs lg:text-[13px]">Expresso</span>
+                                <span id="val-expresso" class="text-slate-900 text-xs lg:text-[13px] font-bold font-mono">-- %</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                <div id="bar-expresso" class="bg-emerald-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-slate-700 font-bold text-xs lg:text-[13px]">Kenya</span>
+                                <span id="val-kenya" class="text-slate-900 text-xs lg:text-[13px] font-bold font-mono">-- %</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                <div id="bar-kenya" class="bg-amber-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-slate-700 font-bold text-xs lg:text-[13px]">Starbucks</span>
+                                <span id="val-starbucks" class="text-slate-900 text-xs lg:text-[13px] font-bold font-mono">-- %</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                                <div id="bar-starbucks" class="bg-sky-600 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Latency Breakdown (Feature Extraction, Model Inference, Total Latency) -->
+                    <div class="grid grid-cols-3 gap-2.5 font-mono text-center">
+                        <div class="bg-slate-50/90 p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
+                            <span id="lbl-metric-feat" class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">Feature Extraction</span>
+                            <span id="metric-feat" class="text-sm lg:text-base font-bold text-slate-900 mt-1 block">-- ms</span>
+                        </div>
+                        <div class="bg-slate-50/90 p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
+                            <span id="lbl-metric-infer" class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">Model Inference</span>
+                            <span id="metric-infer" class="text-sm lg:text-base font-bold text-slate-900 mt-1 block">-- ms</span>
+                        </div>
+                        <div class="bg-slate-50/90 p-2 rounded-lg border border-slate-200 flex flex-col justify-between">
+                            <span class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">Total Latency</span>
+                            <span id="res-total-time" class="text-sm lg:text-base font-bold text-slate-900 mt-1 block">-- ms</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. BOTTOM BLOCK: JETSON DEVICE HARDWARE TELEMETRY -->
+            <div class="bg-white border border-slate-200/90 rounded-xl p-4 lg:p-5 shadow-sm flex flex-col justify-between shrink-0">
+                <!-- Header of Block 2 -->
+                <div class="flex items-center justify-between text-xs font-mono mb-2.5">
+                    <span class="font-bold uppercase tracking-wider text-slate-800 flex items-center space-x-1.5">
+                        <svg class="w-4 h-4 text-emerald-600 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+                        <span id="hw-title">DEVICE HARDWARE STATUS</span>
+                    </span>
+                    <span id="hw-model-tag" class="text-[10px] text-slate-500 font-bold font-mono">--</span>
+                </div>
+
+                <!-- 4 Hardware Metrics Cards -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 font-mono">
+                    <!-- 1. CPU Utilization -->
+                    <div class="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between">
+                        <span class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">CPU Utilization</span>
+                        <div id="hw-cpu" class="text-sm lg:text-base font-bold text-slate-900 mt-1">-- %</div>
+                        <div class="w-full bg-slate-200 rounded-full h-1 mt-1.5 overflow-hidden">
+                            <div id="hw-cpu-bar" class="bg-slate-700 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 2. RAM Memory -->
+                    <div class="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between">
+                        <span class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">Memory RAM</span>
+                        <div id="hw-ram" class="text-xs lg:text-sm font-bold text-slate-900 mt-1 truncate">-- / -- GB</div>
+                        <div class="w-full bg-slate-200 rounded-full h-1 mt-1.5 overflow-hidden">
+                            <div id="hw-ram-bar" class="bg-slate-700 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 3. SoC Temperature -->
+                    <div class="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between">
+                        <span class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">SoC Temperature</span>
+                        <div id="hw-temp" class="text-sm lg:text-base font-bold text-slate-900 mt-1">-- °C</div>
+                        <div class="w-full bg-slate-200 rounded-full h-1 mt-1.5 overflow-hidden">
+                            <div id="hw-temp-bar" class="bg-slate-700 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Power Usage -->
+                    <div class="bg-slate-50/90 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between">
+                        <span class="text-[10px] font-mono text-slate-700 uppercase font-bold tracking-wider block truncate">Power Usage</span>
+                        <div id="hw-power" class="text-sm lg:text-base font-bold text-slate-900 mt-1">-- W</div>
+                        <div class="w-full bg-slate-200 rounded-full h-1 mt-1.5 overflow-hidden">
+                            <div id="hw-power-bar" class="bg-slate-700 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        let currentFiles = [];
+        let currentSampleId = 'Expresso_sample_1.jpg';
+        let lastBatchResult = null;
+        let selectedCellIdx = -1;
+
+        function handleFileChange(event) {
+            const files = Array.from(event.target.files);
+            if (!files || files.length === 0) return;
+
+            currentFiles = files;
+            currentSampleId = null;
+            lastBatchResult = null;
+            selectedCellIdx = -1;
+
+            const uploadBtnText = document.getElementById('upload-btn-text');
+            const countBadge = document.getElementById('upload-count-badge');
+            const previewImg = document.getElementById('preview-img');
+            const batchContainer = document.getElementById('batch-preview-container');
+            const thumbsGrid = document.getElementById('batch-thumbs-grid');
+            const batchTag = document.getElementById('batch-count-tag');
+            const singleCont = document.getElementById('single-preview-container');
+
+            if (files.length === 1) {
+                // CHẾ ĐỘ 1 ẢNH: Giữ nguyên khung hiển thị 1 ảnh đơn lớn
+                if (thumbsGrid) thumbsGrid.style.gridTemplateColumns = '';
+                if (uploadBtnText) uploadBtnText.innerText = files[0].name.length > 25 ? files[0].name.substring(0, 22) + '...' : files[0].name;
+                if (countBadge) countBadge.classList.add('hidden');
+                if (singleCont) singleCont.classList.remove('hidden');
+                if (previewImg) previewImg.classList.remove('hidden');
+                if (batchContainer) batchContainer.classList.add('hidden');
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewImg.src = e.target.result;
+                };
+                reader.readAsDataURL(files[0]);
+            } else {
+                // CHẾ ĐỘ NHIỀU ẢNH: Chia khu vực preview thành lưới các ô, mỗi ô là một ảnh hạt cà phê
+                if (uploadBtnText) uploadBtnText.innerText = `${files.length} Images Selected`;
+                if (countBadge) {
+                    countBadge.innerText = `${files.length} SELECTED`;
+                    countBadge.classList.remove('hidden');
+                }
+                if (singleCont) singleCont.classList.add('hidden');
+                if (previewImg) previewImg.classList.add('hidden');
+                if (batchContainer) batchContainer.classList.remove('hidden');
+                if (batchTag) batchTag.innerText = `${files.length} SAMPLES`;
+
+                // Tự động phân bổ số cột để các mẫu hiển thị vừa vặn 2 hàng trong khung xem
+                let cols = 4;
+                if (files.length <= 4) cols = 2;       // 2 hàng x 2 cột = 4 mẫu
+                else if (files.length <= 6) cols = 3;  // 2 hàng x 3 cột = 6 mẫu
+                else if (files.length <= 8) cols = 4;  // 2 hàng x 4 cột = 8 mẫu
+                else if (files.length <= 10) cols = 5; // 2 hàng x 5 cột = 10 mẫu
+                else cols = 5;                         // > 10 mẫu: 5 cột và cuộn êm
+                if (thumbsGrid) thumbsGrid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+
+                thumbsGrid.innerHTML = '';
+                files.forEach((f, idx) => {
+                    const cell = document.createElement('div');
+                    cell.id = `batch-cell-${idx}`;
+                    cell.className = "group relative aspect-square rounded-lg border border-slate-200 bg-white hover:border-emerald-500 hover:shadow-md cursor-pointer transition-all duration-200 overflow-hidden flex flex-col justify-between p-1 sm:p-1.5";
+                    cell.onclick = () => selectBatchCell(idx);
+                    cell.innerHTML = `
+                        <div class="w-full flex-1 flex items-center justify-center overflow-hidden rounded bg-slate-100">
+                            <img id="batch-cell-img-${idx}" src="" alt="Sample #${idx + 1}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200">
+                        </div>
+                        <div class="mt-1 flex items-center justify-between text-[9px] font-mono leading-none">
+                            <span class="font-bold text-slate-700">#${idx + 1}</span>
+                            <span id="batch-cell-badge-${idx}" class="text-[8px] font-bold px-1 py-0.5 rounded bg-slate-100 text-slate-500 truncate max-w-[55px]">Processing</span>
+                        </div>
+                    `;
+                    thumbsGrid.appendChild(cell);
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = document.getElementById(`batch-cell-img-${idx}`);
+                        if (img) img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(f);
+                });
+            }
+
+            runPrediction();
+        }
+
+        function onConfigChange() {
+            runPrediction();
+        }
+
+        async function runPrediction() {
+            const modelName = document.getElementById('model-select').value;
+            const featureType = document.getElementById('feature-select').value;
+
+            const formData = new FormData();
+            formData.append('model_name', modelName);
+            formData.append('feature_type', featureType);
+
+            if (currentFiles && currentFiles.length > 0) {
+                currentFiles.forEach(f => {
+                    formData.append('files', f);
+                });
+            } else if (currentSampleId) {
+                formData.append('sample_id', currentSampleId);
+            } else {
+                formData.append('sample_id', 'Expresso_sample_1.jpg');
+            }
+
+            document.getElementById('loading-spinner').classList.remove('hidden');
+
+            try {
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    body: formData
+                });
+                const res = await response.json();
+                updateUI(res);
+            } catch (err) {
+                console.error("Classification error:", err);
+            } finally {
+                document.getElementById('loading-spinner').classList.add('hidden');
+            }
+        }
+
+        function selectBatchCell(idx) {
+            if (!lastBatchResult || !lastBatchResult.items || !lastBatchResult.items[idx]) return;
+            selectedCellIdx = idx;
+
+            // Highlight ô được click trong box grid
+            const total = lastBatchResult.items.length;
+            for (let i = 0; i < total; i++) {
+                const cell = document.getElementById(`batch-cell-${i}`);
+                if (cell) {
+                    if (i === idx) {
+                        cell.classList.add('ring-2', 'ring-emerald-500', 'border-emerald-500', 'shadow-md', 'bg-emerald-50/20');
+                        cell.classList.remove('border-slate-200');
+                    } else {
+                        cell.classList.remove('ring-2', 'ring-emerald-500', 'border-emerald-500', 'shadow-md', 'bg-emerald-50/20');
+                        cell.classList.add('border-slate-200');
+                    }
+                }
+            }
+
+            // Hiển thị kết quả đơn ảnh của hạt này vào vùng Classification Results
+            const item = lastBatchResult.items[idx];
+            displaySingleResult(item.predicted_class, item.probabilities, `BEAN #${idx + 1} OF ${total}`);
+        }
+
+        function displaySingleResult(predictedClass, probabilities, tagText = "SINGLE BEAN") {
+            const modeTag = document.getElementById('mode-tag');
+            const classEl = document.getElementById('res-class');
+            const resTitle = document.getElementById('res-title');
+            const distTitle = document.getElementById('dist-title');
+            const resSubtext = document.getElementById('res-subtext');
+
+            if (modeTag) modeTag.innerText = tagText;
+            if (resTitle) resTitle.innerText = "PREDICTED SPECIES";
+            if (distTitle) distTitle.innerText = "CLASS PROBABILITIES";
+            if (resSubtext) resSubtext.classList.add('hidden');
+
+            if (classEl) {
+                classEl.innerText = (predictedClass || '--').toUpperCase();
+                classEl.className = "text-3xl lg:text-4xl font-black text-slate-900 tracking-tight block mt-0.5";
+            }
+
+            ['Expresso', 'Kenya', 'Starbucks'].forEach(c => {
+                const prob = (probabilities && probabilities[c] !== undefined) ? probabilities[c] : 0.0;
+                const lower = c.toLowerCase();
+                const valEl = document.getElementById(`val-${lower}`);
+                const barEl = document.getElementById(`bar-${lower}`);
+                if (valEl) valEl.innerText = `${prob}%`;
+                if (barEl) barEl.style.width = `${prob}%`;
+            });
+        }
+
+        function updateUI(res) {
+            if (!res.success) {
+                alert("Error: " + (res.error || "Unable to classify"));
+                return;
+            }
+
+            const singleCont = document.getElementById('single-preview-container');
+            const batchCont = document.getElementById('batch-preview-container');
+
+            // Cập nhật thông tin thời gian chung cho toàn bộ ảnh load vào (tính chung cho cả mẻ)
+            document.getElementById('metric-feat').innerText = `${res.latency.feature_extraction_ms} ms`;
+            document.getElementById('metric-infer').innerText = `${res.latency.inference_ms} ms`;
+            document.getElementById('res-total-time').innerText = `${res.latency.total_ms} ms`;
+
+            if (!res.is_batch) {
+                lastBatchResult = null;
+                selectedCellIdx = -1;
+
+                if (singleCont && !currentFiles.length) singleCont.classList.remove('hidden');
+                if (batchCont && !currentFiles.length) batchCont.classList.add('hidden');
+
+                // Hiển thị kết quả đơn ảnh
+                displaySingleResult(res.predicted_class, res.probabilities, "SINGLE BEAN");
+
+            } else {
+                lastBatchResult = res;
+
+                const colorMap = {
+                    'Expresso': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+                    'Kenya': 'bg-amber-100 text-amber-800 border-amber-300',
+                    'Starbucks': 'bg-sky-100 text-sky-800 border-sky-300'
+                };
+
+                // Cập nhật nhãn kết quả cho từng ô ảnh trong khung Preview Grid
+                res.items.forEach((item, idx) => {
+                    const badge = document.getElementById(`batch-cell-badge-${idx}`);
+                    if (badge) {
+                        badge.innerText = item.predicted_class;
+                        const badgeStyle = colorMap[item.predicted_class] || 'bg-slate-100 text-slate-700 border-slate-200';
+                        badge.className = `text-[8px] font-bold px-1 py-0.5 rounded border truncate max-w-[65px] ${badgeStyle}`;
+                        badge.title = `${item.predicted_class} (${item.confidence}%)`;
+                    }
+                });
+
+                // Mặc định hiển thị kết quả của ảnh đầu tiên (#1) trong box grid
+                selectBatchCell(0);
+            }
+        }
+
+        async function fetchDeviceStatus() {
+            try {
+                const res = await fetch('/api/system-status');
+                const data = await res.json();
+                
+                // Device tag & header
+                const hwTitle = document.getElementById('hw-title');
+                if (hwTitle) hwTitle.innerText = data.is_jetson ? 'JETSON ORIN STATUS' : 'HOST HARDWARE STATUS';
+                const hwModelTag = document.getElementById('hw-model-tag');
+                if (hwModelTag) hwModelTag.innerText = (data.device_name || (data.is_jetson ? 'Jetson Orin' : 'Host PC')).replace(' (L4T Tegra)', '');
+
+                // 1. CPU Utilization
+                const cpuEl = document.getElementById('hw-cpu');
+                if (cpuEl) cpuEl.innerText = `${data.cpu_percent} %`;
+                const cpuBarEl = document.getElementById('hw-cpu-bar');
+                if (cpuBarEl) cpuBarEl.style.width = `${Math.min(100, Math.max(5, data.cpu_percent))}%`;
+
+                // 2. Memory RAM
+                const ramEl = document.getElementById('hw-ram');
+                if (ramEl) ramEl.innerText = `${data.ram_used_gb} / ${data.ram_total_gb} GB`;
+                const ramBarEl = document.getElementById('hw-ram-bar');
+                if (ramBarEl) ramBarEl.style.width = `${data.ram_percent}%`;
+
+                // 3. SoC Temperature
+                const tempEl = document.getElementById('hw-temp');
+                const tempBarEl = document.getElementById('hw-temp-bar');
+                if (tempEl) {
+                    if (data.temperature_c !== null && data.temperature_c !== undefined) {
+                        tempEl.innerText = `${data.temperature_c} °C`;
+                        if (tempBarEl) tempBarEl.style.width = `${Math.min(100, Math.round((data.temperature_c / 85) * 100))}%`;
+                    } else {
+                        tempEl.innerText = 'N/A';
+                        if (tempBarEl) tempBarEl.style.width = '0%';
+                    }
+                }
+
+                // 4. Power Draw
+                const powerEl = document.getElementById('hw-power');
+                const powerBarEl = document.getElementById('hw-power-bar');
+                if (powerEl) {
+                    if (data.power_w !== null && data.power_w !== undefined) {
+                        powerEl.innerText = `${data.power_w} W`;
+                        if (powerBarEl) powerBarEl.style.width = `${data.power_percent || 0}%`;
+                    } else {
+                        powerEl.innerText = 'N/A';
+                        if (powerBarEl) powerBarEl.style.width = '0%';
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch system status:", err);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            runPrediction();
+            fetchDeviceStatus();
+            setInterval(fetchDeviceStatus, 2000);
+        });
+    </script>
+</body>
+</html>

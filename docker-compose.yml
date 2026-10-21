@@ -1,0 +1,18 @@
+services:
+  coffee-edge-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: coffee-edge-deployment:latest
+    container_name: coffee_edge_ai_container
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./app:/workspace/app
+      - ./data:/workspace/data
+      - ./weights:/workspace/weights
+      - ./benchmarking:/workspace/benchmarking
+      - /etc/nv_tegra_release:/etc/nv_tegra_release:ro
+    environment:
+      - PORT=8000
+    command: python run_server.py
